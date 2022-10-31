@@ -223,8 +223,8 @@ void task3() {
             }
 
             // отправляем сколько строк и с какого индекса нужно заполнить матрицу c
-            MPI_Send(&batch, 1, MPI_DOUBLE, i, 99, MPI_COMM_WORLD);
-            MPI_Send(&rowStartNumber, 1, MPI_DOUBLE, i, 100, MPI_COMM_WORLD);
+            MPI_Send(&batch, 1, MPI_INT, i, 99, MPI_COMM_WORLD);
+            MPI_Send(&rowStartNumber, 1, MPI_INT, i, 100, MPI_COMM_WORLD);
 
             for (int j = rowStartNumber; j < rowStartNumber + batch; j++) {
                 MPI_Send(&a[j][0], n, MPI_DOUBLE, i, 101,MPI_COMM_WORLD);
@@ -260,8 +260,8 @@ void task3() {
         MPI_Status statusElem;
         MPI_Status statusStart;
 
-        MPI_Recv(&count, 1, MPI_DOUBLE, MPI_ANY_SOURCE, 99,MPI_COMM_WORLD, &statusElem);
-        MPI_Recv(&start, 1, MPI_DOUBLE, MPI_ANY_SOURCE, 100, MPI_COMM_WORLD,&statusStart);
+        MPI_Recv(&count, 1, MPI_INT, MPI_ANY_SOURCE, 99,MPI_COMM_WORLD, &statusElem);
+        MPI_Recv(&start, 1, MPI_INT, MPI_ANY_SOURCE, 100, MPI_COMM_WORLD,&statusStart);
 
         for (int i = start; i < start + count; i++) {
             MPI_Recv(&batchA[i], n, MPI_DOUBLE, MPI_ANY_SOURCE, 101,MPI_COMM_WORLD, &statusA);
@@ -317,8 +317,8 @@ int task4() {
             printf("\n");
         }
 
-        double * lineA = new double [aRow * aColumn];
-        double * lineB = new double[bRow * bColumn];
+        double* lineA = new double[aRow * aColumn];
+        double* lineB = new double[bRow * bColumn];
 
         for (int i = 0; i < aRow; i++) {
             for (int j = 0; j < aColumn; j++) {
@@ -405,7 +405,7 @@ int task4() {
         }
 
         int batch = aRow / (size - 1) + 1;
-        int start = (rank - 1) * batch;
+        int start = (rank - 1) * batch; // определяем какой диапазон будем рассматривать для строк матрицы
         int end = rank * batch;
 
         if (end > aRow) {
@@ -446,11 +446,11 @@ int task5() {
     const int aColumn = 2;
     const int aRow = 3;
 
-    double b[aColumn][aRow];
-    double v[aColumn];
-
     double a[aRow][aColumn];
     int row, column = 0;
+
+    double b[aColumn][aRow];
+    double v[aColumn];
 
     if (rank == 0) {
         srand(static_cast<unsigned int>(time(0)));
@@ -467,18 +467,23 @@ int task5() {
             printf("\n");
         }
 
+        // сколько строк обработать для каждого потока
         int batch = ceil((double) aRow / (size - 1));
 
         for (int i = 1; i < size; i++) {
+            // для каждого потока определяем номер первой строки из пачки
             int start = (i - 1) * batch;
 
+            // для последнего потока размер пачки будет отличаться
             if (aRow - start <= batch) {
                 batch = aRow - start;
             }
 
+            // отправляем размер пачки и номер первой строки пачки
             MPI_Send(&batch, 1, MPI_INT, i, 99, MPI_COMM_WORLD);
             MPI_Send(&start, 1, MPI_INT, i, 100, MPI_COMM_WORLD);
 
+            // от номера первой строки пачки до последней (то есть отправляем целую пачку)
             for (int j = start; j < start + batch; j++) {
                 MPI_Send(&a[j][0], aColumn, MPI_DOUBLE, i, 101,MPI_COMM_WORLD);
             }
@@ -522,6 +527,7 @@ int task5() {
 
         double batchA[aRow][aColumn];
 
+        // заполняем то, что получили
         for (int i = start; i < start + count; i++) {
             MPI_Recv(&batchA[i][0], aColumn, MPI_DOUBLE, MPI_ANY_SOURCE, 101,MPI_COMM_WORLD, &aStatus);
 
@@ -541,7 +547,7 @@ int main(int argc, char** argv) {
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    task1();
+    task3();
     MPI_Finalize();
     return 0;
 }

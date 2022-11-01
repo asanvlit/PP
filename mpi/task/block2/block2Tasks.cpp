@@ -326,11 +326,11 @@ int task4() {
             printf("\n");
         }
 
-        double transportedB[bColumn][bRow];
+        double transposedB[bColumn][bRow];
 
         for (int i = 0; i < aRow; i++) {
             for (int j = 0; j < aColumn; j++) {
-                transportedB[i][j] = b[j][i];
+                transposedB[i][j] = b[j][i];
             }
         }
 
@@ -348,7 +348,7 @@ int task4() {
             for (int j = rowStartNumber; j < rowStartNumber + batch; j++) {
                 for (int k = 0; k < bColumn; k++) {
                     MPI_Send(&a[j][0], aColumn, MPI_DOUBLE, i, 101, MPI_COMM_WORLD);
-                    MPI_Send(&transportedB[k][0], bRow, MPI_DOUBLE, i, 102, MPI_COMM_WORLD);
+                    MPI_Send(&transposedB[k][0], bRow, MPI_DOUBLE, i, 102, MPI_COMM_WORLD);
                 }
             }
 

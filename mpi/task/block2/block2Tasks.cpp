@@ -427,23 +427,18 @@ int task5() {
             printf("\n");
         }
 
-        // сколько строк обработать для каждого потока
         int batch = ceil((double) aRow / (size - 1));
 
         for (int i = 1; i < size; i++) {
-            // для каждого потока определяем номер первой строки из пачки
             int start = (i - 1) * batch;
 
-            // для последнего потока размер пачки будет отличаться
             if (aRow - start <= batch) {
                 batch = aRow - start;
             }
 
-            // отправляем размер пачки и номер первой строки пачки
             MPI_Send(&batch, 1, MPI_INT, i, 99, MPI_COMM_WORLD);
             MPI_Send(&start, 1, MPI_INT, i, 100, MPI_COMM_WORLD);
 
-            // от номера первой строки пачки до последней (то есть отправляем целую пачку)
             for (int j = start; j < start + batch; j++) {
                 MPI_Send(&a[j][0], aColumn, MPI_DOUBLE, i, 101,MPI_COMM_WORLD);
             }
@@ -487,7 +482,6 @@ int task5() {
 
         double batchA[aRow][aColumn];
 
-        // заполняем то, что получили
         for (int i = start; i < start + count; i++) {
             MPI_Recv(&batchA[i][0], aColumn, MPI_DOUBLE, MPI_ANY_SOURCE, 101,MPI_COMM_WORLD, &aStatus);
 

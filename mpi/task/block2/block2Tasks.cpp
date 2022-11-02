@@ -7,15 +7,6 @@
 
 int rank, size;
 
-void print_matrix(double **m, int rows, int cols) {
-    for (int i = 0; i < rows; ++i) {
-        std::cout << i << ": ";
-        for (size_t j = 0; j < cols; ++j)
-            std::cout << m[i][j] << '\t';
-        std::cout << std::endl;
-    }
-}
-
 void task1() {
     const int n = 100;
 
@@ -225,24 +216,38 @@ void task3() {
         int batch = ceil((double) n / (size - 1));
 
         for (int i = 1; i < size; i++) {
+            int sendBatch;
             int rowStartNumber = (i - 1) * batch;
 
             if (n - rowStartNumber <= batch) {
-                batch = n - rowStartNumber;
+                sendBatch = n - rowStartNumber;
+            } else {
+                sendBatch = batch;
             }
 
             // отправляем сколько строк и с какого индекса нужно заполнить матрицу c
-            MPI_Send(&batch, 1, MPI_INT, i, 99, MPI_COMM_WORLD);
+            MPI_Send(&sendBatch, 1, MPI_INT, i, 99, MPI_COMM_WORLD);
             MPI_Send(&rowStartNumber, 1, MPI_INT, i, 100, MPI_COMM_WORLD);
 
-            for (int j = rowStartNumber; j < rowStartNumber + batch; j++) {
+            for (int j = rowStartNumber; j < rowStartNumber + sendBatch; j++) {
                 MPI_Send(&a[j][0], n, MPI_DOUBLE, i, 101,MPI_COMM_WORLD);
                 MPI_Send(&b[j][0], n, MPI_DOUBLE, i, 102,MPI_COMM_WORLD);
+            }
+        }
+
+        for (int i = 1; i < size; i++) {
+            int receivedBatchSize;
+            int rowStartNumber = (i - 1) * batch;
+
+            if (n - rowStartNumber <= batch) {
+                receivedBatchSize = n - rowStartNumber;
+            } else {
+                receivedBatchSize = batch;
             }
 
             double batchC[n];
             MPI_Status statusC;
-            for (int j = rowStartNumber; j < rowStartNumber + batch; j++) {
+            for (int j = rowStartNumber; j < rowStartNumber + receivedBatchSize; j++) {
                 MPI_Recv(batchC, n, MPI_DOUBLE, i, 103,MPI_COMM_WORLD, &statusC);
 
                 for (int k = 0; k < n; k++) {
@@ -335,24 +340,38 @@ int task4() {
         }
 
         for (int i = 1; i < size; i++) {
+            int sendBatch;
             int rowStartNumber = (i - 1) * batch;
 
             if (aRow - rowStartNumber <= batch) {
-                batch = aRow - rowStartNumber;
+                sendBatch = aRow - rowStartNumber;
+            } else {
+                sendBatch = batch;
             }
 
             // чтобы понять сколько раз должен быть send в потоках где rank != 0
-            MPI_Send(&batch, 1, MPI_INT, i, 99, MPI_COMM_WORLD);
+            MPI_Send(&sendBatch, 1, MPI_INT, i, 99, MPI_COMM_WORLD);
             MPI_Send(&rowStartNumber, 1, MPI_INT, i, 100, MPI_COMM_WORLD);
 
-            for (int j = rowStartNumber; j < rowStartNumber + batch; j++) {
+            for (int j = rowStartNumber; j < rowStartNumber + sendBatch; j++) {
                 for (int k = 0; k < bColumn; k++) {
                     MPI_Send(&a[j][0], aColumn, MPI_DOUBLE, i, 101, MPI_COMM_WORLD);
                     MPI_Send(&transposedB[k][0], bRow, MPI_DOUBLE, i, 102, MPI_COMM_WORLD);
                 }
             }
+        }
 
-            for (int j = rowStartNumber; j < rowStartNumber + batch; j++) {
+        for (int i = 1; i < size; i++) {
+            int receivedBatchSize;
+            int rowStartNumber = (i - 1) * batch;
+
+            if (aRow - rowStartNumber <= batch) {
+                receivedBatchSize = aRow - rowStartNumber;
+            } else {
+                receivedBatchSize = batch;
+            }
+
+            for (int j = rowStartNumber; j < rowStartNumber + receivedBatchSize; j++) {
                 for (int k = 0; k < bColumn; k++) {
                     double *batchC = new double[1];
                     MPI_Status status;
@@ -402,24 +421,33 @@ int task4() {
     return 0;
 }
 
-int task5() {
-    const int aColumn = 2;
-    const int aRow = 3;
+int task5 () {
+    int aRow = 5;
+    int aColumn = 5;
+
+    if ((size - 1) % 2 != 0) {
+        return -1;
+    }
 
     double a[aRow][aColumn];
-    int row, column = 0;
+    double aTransposed[aColumn][aRow];
 
-    double b[aColumn][aRow];
-    double v[aColumn];
+    int batchRow, batchColumn;
+    batchRow = ceil(aRow * 1.0 / 2);
+    batchColumn = ceil((double) aColumn / ((size - 1) * 1.0 / 2));
 
     if (rank == 0) {
-        srand(static_cast<unsigned int>(time(0)));
+//        srand(static_cast<unsigned int>(time(0)));
+        int tmp[size - 1][4];
+
+        int counter = 1;
         for (int i = 0; i < aRow; i++) {
             for (int j = 0; j < aColumn; j++) {
-                a[i][j] = rand() % 9;
+                a[i][j] = counter++;
             }
         }
         printf("Matrix A:\n");
+        int row, column = 0;
         for (row = 0; row < aRow; row++) {
             for (column = 0; column < aColumn; column++) {
                 printf("%f     ", a[row][column]);
@@ -427,73 +455,88 @@ int task5() {
             printf("\n");
         }
 
-        int batch = ceil((double) aRow / (size - 1));
-
         for (int i = 1; i < size; i++) {
-            int start = (i - 1) * batch;
+            int columnStartNumber, rowStartNumber, rowsCount, columnsCount;
 
-            if (aRow - start <= batch) {
-                batch = aRow - start;
+            if (i <= size / 2) {
+                columnStartNumber = (i - 1) * batchColumn;
+                rowStartNumber = 0;
+                rowsCount = batchRow;
+            } else {
+                columnStartNumber = (i - (size - 1) / 2 - 1) * batchColumn;
+                rowStartNumber = ceil(aRow * 1.0 / 2);
+                rowsCount = aRow - aRow / 2 - bool(aRow % 2 != 0);
+            }
+            if (aColumn - columnStartNumber < batchColumn) {
+                columnsCount = aColumn - columnStartNumber;
+            } else {
+                columnsCount = batchColumn;
+            }
+            tmp[i - 1][0] = rowsCount;
+            tmp[i - 1][1] = columnsCount;
+            tmp[i - 1][2] = rowStartNumber;
+            tmp[i - 1][3] = columnStartNumber;
+
+            double aPart[rowsCount][columnsCount];
+            for (int i1 = rowStartNumber, i2 = 0; i1 <= rowStartNumber + rowsCount - 1; i1++, i2++) {
+                for (int j1 = columnStartNumber, j2 = 0; j1 <= columnStartNumber + columnsCount - 1; j1++, j2++) {
+                    aPart[i2][j2] = a[i1][j1];
+                }
             }
 
-            MPI_Send(&batch, 1, MPI_INT, i, 99, MPI_COMM_WORLD);
-            MPI_Send(&start, 1, MPI_INT, i, 100, MPI_COMM_WORLD);
-
-            for (int j = start; j < start + batch; j++) {
-                MPI_Send(&a[j][0], aColumn, MPI_DOUBLE, i, 101,MPI_COMM_WORLD);
-            }
+            MPI_Send(&rowsCount, 1, MPI_INT, i, 99, MPI_COMM_WORLD);
+            MPI_Send(&columnsCount, 1, MPI_INT, i, 100, MPI_COMM_WORLD);
+            MPI_Send(&aPart[0][0], rowsCount * columnsCount, MPI_DOUBLE, i, 101, MPI_COMM_WORLD);
         }
 
         for (int i = 1; i < size; i++) {
-            MPI_Status statusC;
+            int columns = tmp[i-1][0];
+            int rows = tmp[i-1][1];
+            int columnNumberStart = tmp[i-1][2];
+            int rowNumberStart = tmp[i-1][3];
+
+            double aPartTransposed[rows][columns];
+
             MPI_Status status;
-            MPI_Status statusCount;
+            MPI_Recv(*aPartTransposed, rows * columns, MPI_DOUBLE, i, 102, MPI_COMM_WORLD, &status);
 
-            int start, count;
-            double batchV[aColumn];
-
-            MPI_Recv(&start, 1, MPI_INT, i, 102, MPI_COMM_WORLD, &status);
-            MPI_Recv(&count, 1, MPI_INT, i, 103, MPI_COMM_WORLD,&statusCount);
-            MPI_Recv(&batchV, aColumn, MPI_DOUBLE, i, 104, MPI_COMM_WORLD, &statusC);
-
-            for (int j = start; j < start + count; j++) {
-                for (int l = 0; l < aColumn; l++) {
-                    b[l][j] = batchV[l];
+            for (int j1 = rowNumberStart, j2 = 0; j1 <= rowNumberStart + rows - 1; j1++, j2++) {
+                for (int k1 = columnNumberStart, k2 = 0; k1 <= columnNumberStart + columns - 1; k1++, k2++) {
+                    aTransposed[j1][k1] = aPartTransposed [j2][k2];
                 }
             }
         }
-        printf("Matrix B:\n");
-        for (row = 0; row < aColumn; row++) {
-            for (column = 0; column < aRow; column++) {
-                printf("%f     ", b[row][column]);
+
+        printf("Transposed matrix :\n");
+        for (int r = 0; r < aColumn; r++) {
+            for (int c = 0; c < aRow; c++) {
+                printf("%f     ", aTransposed[r][c]);
             }
             printf("\n");
         }
-    }
-    else {
-        MPI_Status aStatus;
-        MPI_Status elemStatus;
-        MPI_Status startStatus;
+    } else {
+        int rowsCount, columnsCount;
 
-        int count, start;
+        MPI_Status statusRows;
+        MPI_Status statusColumns;
 
-        MPI_Recv(&count, 1, MPI_INT, MPI_ANY_SOURCE, 99, MPI_COMM_WORLD, &elemStatus);
-        MPI_Recv(&start, 1, MPI_INT, MPI_ANY_SOURCE, 100, MPI_COMM_WORLD,&startStatus);
+        MPI_Recv(&rowsCount, 1, MPI_INT, MPI_ANY_SOURCE, 99,MPI_COMM_WORLD, &statusRows);
+        MPI_Recv(&columnsCount, 1, MPI_INT, MPI_ANY_SOURCE, 100, MPI_COMM_WORLD,&statusColumns);
 
-        double batchA[aRow][aColumn];
+        double aPart[rowsCount][columnsCount];
+        double aPartTransposed[columnsCount][rowsCount];
 
-        for (int i = start; i < start + count; i++) {
-            MPI_Recv(&batchA[i][0], aColumn, MPI_DOUBLE, MPI_ANY_SOURCE, 101,MPI_COMM_WORLD, &aStatus);
+        MPI_Status statusPart;
+        MPI_Recv(&aPart[0][0], rowsCount * columnsCount, MPI_DOUBLE, MPI_ANY_SOURCE, 101,MPI_COMM_WORLD, &statusPart);
 
-            for (int j = 0; j < aColumn; j++) {
-                v[j] = batchA[i][j];
+        for (int i = 0; i < columnsCount; i++) {
+            for (int j = 0; j < rowsCount; j++) {
+                aPartTransposed[i][j] = aPart[j][i];
             }
         }
-
-        MPI_Send(&start, 1, MPI_INT, 0, 102, MPI_COMM_WORLD);
-        MPI_Send(&count, 1, MPI_INT, 0, 103, MPI_COMM_WORLD);
-        MPI_Send(&v, aColumn, MPI_DOUBLE, 0, 104, MPI_COMM_WORLD);
+        MPI_Send(&aPartTransposed[0][0], columnsCount * rowsCount, MPI_DOUBLE, 0, 102, MPI_COMM_WORLD);
     }
+
     return 0;
 }
 
@@ -501,7 +544,7 @@ int main(int argc, char** argv) {
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    task4();
+    task3();
 //    double starttime, endtime;
 //    starttime = MPI_Wtime();
 //    endtime = MPI_Wtime();

@@ -7,7 +7,9 @@
 int rank, size;
 
 void task1() {
-    // оцениваются 2/3 задач
+    /** реализовала алгоритм решения СЛАУ с помощью Гаусса здесь (в качестве решения задания AUTO 5):
+     * https://github.com/asanvlit/GaussParallel/blob/master/main.cpp
+     * */
 }
 
 void task2() {
